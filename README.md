@@ -6,5 +6,5 @@ Please use the requirements.txt to help install your required packages, feel fre
 
 The main code file should be in code/main.py if you use other languages / tools provide us with adequate documentation on how to run it. We will run it on new data to check your results.
 
-Find the data details in the data folder. See the Readme there.
-Results should be in the results folder. See the Readme there.
+Find the data details in the data folder. See the [Readme](data/ReadMe.md) there.
+Results should be in the results folder. See the [Readme](results/ReadMe.md) there.
