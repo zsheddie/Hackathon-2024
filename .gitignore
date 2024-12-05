@@ -1,3 +1,10 @@
+# Custom, data should not be made public!
+data/*
+!data/part_1/
+!data/part_2/
+!data/Readme.md
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
