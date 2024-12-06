@@ -1,17 +1,6 @@
-"""
-To see if your program is running correctly, we provide a simple evaluation script.
-It should work as long as your output follows the format described above.
-You can run it by the following command if your program is `python solution/main.py`:
-
-```bash
-python evaluate/eval.py 'python solution/main.py'
-```
-
-"""
-
 from argparse import ArgumentParser
 from pathlib import Path
-import subprocess
+from subprocess import check_call
 
 import pandas as pd
 import numpy as np
@@ -38,9 +27,7 @@ def main():
     ground_truth_file = directory / "ground_truth.csv"
 
     # Call the program
-    return_code = subprocess.check_call(
-        [*command.split(" "), str(input_file), str(output_file)]
-    )
+    return_code = check_call([*command.split(" "), str(input_file), str(output_file)])
     if return_code != 0:
         raise ValueError("The program did not run successfully")
     if not output_file.exists():
