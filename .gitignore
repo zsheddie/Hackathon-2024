@@ -1,6 +1,6 @@
 # Custom, data should not be made public!
 data/**
-!data/dummy/
+!data/dummy/** */
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
