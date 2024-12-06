@@ -7,8 +7,8 @@ Welcome, and thank you for participating! This repository contains a skeleton fo
 The challenge was presented during the kick-off meeting.
 In short, the task is to find a good position and rotation for a robotic arm to grab a piece of cut sheet metal.
 
-<img src="data/part_1/part_1.png" alt="An example input image" width="200px" /> 
-<img src="results/part_1/visualisation_1.png" alt="An example solution" width="200px" />
+<img src="data/dummy/part_1/part_1.png" alt="An example input image" width="200px" /> 
+<img src="data/dummy/part_1/visualisation_1.png" alt="An example solution" width="200px" />
 
 ### Where is my data?
 
