@@ -1,31 +1,8 @@
 import cv2
 import numpy as np
 
-# 读取图像
-image = cv2.imread('mask_20241202-170222-294.png')  # 加载图像
 
-print("image data type:", type(image))  # 类型是 NumPy 数组
-print("image shape:", image.shape)  # 打印形状 (height, width, channels)
-# print("图片数据 (前5行):", image[:5])  # 打印前5行数据
-
-### print a random coordinates
-height, width = image.shape[0], image.shape[1]
-y = np.random.randint(0, height)
-x = np.random.randint(0, width)
-alpha = np.random.randint(0, 360)
-
-print("Random coordinates:", (x, y, alpha))
-
-## batch process
-num_points = 1000
-height, width = image.shape[0], image.shape[1]
-y = np.random.randint(0, height, num_points)
-x = np.random.randint(0, width, num_points)
-alpha = np.random.randint(0, 360, num_points)
-coords = list(zip(x, y, alpha))
-
-
-def create_mask(image_path, output_path, is_element = True):
+def create_mask(image_path, output_path = None, is_element = True):
     """
     将背景为透明的图片中的透明背景设置为白色，其余部分设置为黑色。
     
@@ -36,11 +13,12 @@ def create_mask(image_path, output_path, is_element = True):
     image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     
     # 检查是否有 Alpha 通道
-    if image.shape[2] == 4:
+    # print(image.shape)
+    if len(image.shape) == 3 and image.shape[2] == 4:
         # 提取 Alpha 通道
         alpha_channel = image[:, :, 3]
-        if is_element == False:
-            print('check 1', image.shape)
+        #if is_element == False:
+            #print('check 1', image.shape)
         
         # 创建一个全白图像（255 为白色）
         # white_background = np.ones_like(alpha_channel) * 255
@@ -50,25 +28,31 @@ def create_mask(image_path, output_path, is_element = True):
             # mask = cv2.bitwise_not(alpha_channel)  # 反转 Alpha 通道
             mask = np.where(alpha_channel == 0, 255, 0).astype(np.uint8)
         else:
-            print('=======>', alpha_channel.shape)
+            #print('=======>', alpha_channel.shape)
             mask = np.where(alpha_channel == 0, 0, 255).astype(np.uint8)
         # result = cv2.merge((mask, mask, mask, white_background))
+    elif len(image.shape) == 3 and image.shape[2] == 3:
+        # 假设三通道输入，透明区域定义为纯黑色（0,0,0）
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        mask = np.where(gray_image == 0, 255 if is_element else 0, 0 if is_element else 255).astype(np.uint8)
+    elif len(image.shape) == 2:
+        mask = np.where(image == 0, 255 if is_element else 0, 0 if is_element else 255).astype(np.uint8)
+        
     else:
-        raise ValueError("input img no alpha channel !")
-    
+        raise ValueError("Input image must be either 1 or 3 or 4 channels")
     # 保存结果
     # cv2.imwrite(output_path, mask)
 
     return mask
 
 
-def check_black_overlap(image1, image2):
+def check_black_overlap(image1, image2, rotate = None):
     """
     检测两张黑白图片的黑色部分是否有重叠。
 
     :param image1: numpy 数组格式的黑白图像1
     :param image2: numpy 数组格式的黑白图像2
-    :return: 1 表示有重叠, 0 表示无重叠
+    :return: 1 表示有重叠，0 表示无重叠
     """
     # 确保输入图像是单通道
     if len(image1.shape) != 2 or len(image2.shape) != 2:
@@ -97,22 +81,18 @@ def check_black_overlap(image1, image2):
     else:
         return 0
 
-if __name__ == "__main__":
-    # 测试函数
-    element_path = "mask_20241202-170222-294.png"
-    gripper_path = '1.png'
-    output_path = "output_mask.png"
+def euclidean_distance(coord1, coord2):
+    """
+    计算两个n维坐标的欧几里得距离
 
-    element_mask = create_mask(element_path, output_path, True)
-    gripper_mask = create_mask(gripper_path, output_path, False)
+    参数:
+    coord1 (ndarray): 第一个坐标 (n维数组)
+    coord2 (ndarray): 第二个坐标 (n维数组)
 
-    cv2.imshow("Mask element", element_mask)
-    cv2.imshow("Mask Image", gripper_mask)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()   
-
-    image1 = element_mask
-    image2 = gripper_mask
-
-    result = check_black_overlap(image1, image2)
-    print("是否有重叠:", result)
+    返回:
+    float: 两个坐标之间的欧几里得距离
+    """
+    coord1 = np.array(coord1)
+    coord2 = np.array(coord2)
+    distance = np.linalg.norm(coord1 - coord2)  # 使用 NumPy 计算欧几里得距离
+    return distance
