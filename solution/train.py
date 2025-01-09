@@ -264,8 +264,8 @@ if __name__ == "__main__":
     loss_list = []
     lr = 0.1
     for epoch in range(num_epochs):
-        if epoch % 3 == 2:
-            lr = lr * 0.9
+        if epoch % 8 == 7:
+            lr = lr * 0.3
         optimizer = optim.Adam(model.parameters(), lr)
 
         model.train()  # 设定模型为训练模式
@@ -310,7 +310,9 @@ if __name__ == "__main__":
                 mask_image = create_mask(inputs[1][i], None, True)
                 mask_gripper = create_mask(inputs[2][i], None, False)
                 rotate = outputs[i][2].item()
-                overlap = check_black_overlap(mask_image, mask_gripper, rotate)
+                x = pred_coords[i][0].item()
+                y = pred_coords[i][1].item()
+                overlap = check_black_overlap(mask_image, mask_gripper, rotate, x, y)
                 loss_overlap += overlap
             loss = ((0.1 * loss_distance) + (0.9 * loss_overlap)).mean()
             #print('loss = ', loss)

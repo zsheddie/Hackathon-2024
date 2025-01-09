@@ -49,19 +49,22 @@ def create_mask(image_path, output_path = None, is_element = True):
     return mask
 
 
-def check_black_overlap(image1, image2, rotate=None):
+def check_black_overlap(image1, image2, rotate=None, x=0, y=0):
     """ 
-    Checks for overlapping black areas in two black and white images
+    Checks for overlapping black areas in two black and white images, with translation and rotation applied to the second image
     
     :param image1: First black and white image in numpy array format
     :param image2: Second black and white image in numpy array format
     :param rotate: Rotation angle (in degrees) for the second image
+    :param x: X-coordinate of the second image center relative to the first image's top-left corner
+    :param y: Y-coordinate of the second image center relative to the first image's top-left corner
     :return: 1 if overlap exists, 0 if no overlap
     """
     # Ensure the input images are single-channel
     if len(image1.shape) != 2 or len(image2.shape) != 2:
         raise ValueError("input image must be black and white!")
 
+    # Apply rotation to the second image if specified
     if rotate is not None:
         # Get the size of the second image
         h2, w2 = image2.shape
@@ -97,9 +100,19 @@ def check_black_overlap(image1, image2, rotate=None):
     image1_padded = cv2.copyMakeBorder(image1, 0, max_height - h1, 0, max_width - w1, cv2.BORDER_CONSTANT, value=255)
     image2_padded = cv2.copyMakeBorder(image2, 0, max_height - h2, 0, max_width - w2, cv2.BORDER_CONSTANT, value=255)
 
+    # Calculate the translation required for image2 based on x, y coordinates
+    x_shift = x - w2 // 2  # Translate based on the center of image2
+    y_shift = y - h2 // 2  # Translate based on the center of image2
+
+    # Create a translation matrix
+    translation_matrix = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
+
+    # Apply the translation to the second image
+    translated_image2 = cv2.warpAffine(image2_padded, translation_matrix, (max_width, max_height), borderValue=255)
+
     # Find the black areas (pixel value 0) overlap between both images
     mask1 = (image1_padded == 0).astype(np.uint8)
-    mask2 = (image2_padded == 0).astype(np.uint8)
+    mask2 = (translated_image2 == 0).astype(np.uint8)
     overlap = cv2.bitwise_and(mask1, mask2)
 
     # Check if there is any black pixel in the overlap region
