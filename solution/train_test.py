@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from efficientnet_pytorch import EfficientNet
-from utils import *
+from utils import create_mask, check_black_overlap, euclidean_distance
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, transforms
@@ -13,7 +13,6 @@ from itertools import product
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 sys.path.append('D:/hackathon2024/Hackathon-2024/solution')
 
 class RohdatenDataset(Dataset):
@@ -129,54 +128,6 @@ class RohdatenDataset(Dataset):
         
         return combined_tensor, img_path, gripper_path
 
-class RohdatenDataset_p(Dataset):
-    def __init__(self, root_dir, transform=None):
-        """
-        :param root_dir: 总文件夹路径
-        :param transform: 图像的转换
-        """
-        self.root_dir = root_dir
-        self.transform = transform
-        self.image_paths = []
-        
-        # 遍历所有一级子文件夹
-        for subfolder in os.listdir(root_dir):
-            subfolder_path = os.path.join(root_dir, subfolder)
-            if not os.path.isdir(subfolder_path):
-                continue
-            
-            # 定位到 positional_variation 文件夹
-            pos_var_folder = os.path.join(subfolder_path, "positional_variation")
-            if os.path.exists(pos_var_folder):
-                # 添加 positional_variation 文件夹的所有图片
-                self.image_paths.extend([
-                    os.path.join(pos_var_folder, file)
-                    for file in os.listdir(pos_var_folder)
-                    if file.lower().endswith((".png", ".jpg", ".jpeg"))
-                ])
-            
-            # 添加两张特殊图片
-            special_images = [
-                os.path.join(subfolder_path, "special1.png"),
-                os.path.join(subfolder_path, "special2.png")
-            ]
-            for special_image in special_images:
-                if os.path.exists(special_image):
-                    self.image_paths.append(special_image)
-
-    def __len__(self):
-        return len(self.image_paths)
-
-    def __getitem__(self, idx):
-        # 获取指定索引的图片路径
-        img_path = self.image_paths[idx]
-        image = Image.open(img_path).convert("RGB")  # 确保图片是RGB格式
-
-        # 如果有转换，应用转换
-        if self.transform:
-            image = self.transform(image)
-
-        return image
 
 # 定义新的模型类
 class CustomEfficientNet(nn.Module):
@@ -242,7 +193,7 @@ if __name__ == "__main__":
     root = '../data/raw'
     root_test = '../data/evaluate'
     train_dataset = RohdatenDataset(root_dir = root, transform=transform, train=True)
-    train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
     #print('###################')
     #print(len(train_dataset))
 
@@ -252,123 +203,95 @@ if __name__ == "__main__":
     # test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
 
-    # optimizer = optim.Adam(model.parameters(), lr=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # 4. 训练模型
-    num_epochs = 1
+    num_epochs = 200
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
 
     # 2. 将模型移到 GPU
-    model = model.to(device)
+    # model = model.to(device)
     loss_list = []
-    lr = 0.1
     for epoch in range(num_epochs):
-        if epoch % 10 == 9:
-            lr = lr * 0.1
-        optimizer = optim.Adam(model.parameters(), lr)
-
         model.train()  # 设定模型为训练模式
         running_loss = 0.0
         correct = 0
         total = 0
-        # print('train_loader length: ', len(train_loader))
+        print('02578903207029', len(train_loader))
         for inputs in tqdm(train_loader):
-            # inputs = batch of: combined_tensor, img_path, gripper_path
-            # print('--->', inputs[0].shape)
-            # inputs = [input_tensor.to(device) for input_tensor in inputs[0]]
-            input_tensor = inputs[0].to(device)
-            # print(inputs.shape)
+            # inputs = [input_tensor.to(device) for input_tensor in inputs]
             # 清零梯度
             optimizer.zero_grad()
-            #print('imputs 0: ', inputs[0].shape)
-            #print('imputs 1: ', inputs[1].shape)
             
-            # inputs[0].show()
+            print('imputs 0: ', inputs[0].shape)
+            # print('imputs 1: ', len(inputs[1]))
+            # print('====>', inputs[2])
             
-            # 向前传播
-            outputs = model(input_tensor)
-            #print('outputs.shape: ', outputs.shape)   ## batch_size * 3
+    #         # inputs[0].show()
+            
+    #         # 向前传播
+    #         outputs = model(inputs[0])
+    #         #print('outputs.shape: ', outputs.shape)   ## batch_size * 3
 
-            pred_coords = outputs[:, :2]
-            target_point = torch.tensor([112, 112], dtype=torch.float).to(device) 
-            # 计算欧几里得距离
-            # distances = torch.norm(batch_tensor - target_point, dim=1)
-            loss_distance = torch.sum((pred_coords - target_point) ** 2, dim=1).mean()
-            # print(torch.sum((pred_coords - target_point) ** 2, dim=1))
-            #print('loss_distance = ', loss_distance)
+    #         pred_coords = outputs[:, :2]
+    #         target_point = torch.tensor([112, 112], dtype=torch.float).to(device) 
+    #         # 计算欧几里得距离
+    #         # distances = torch.norm(batch_tensor - target_point, dim=1)
+    #         loss_distance = torch.sum((pred_coords - target_point) ** 2, dim=1).mean()
+    #         # print(torch.sum((pred_coords - target_point) ** 2, dim=1))
+    #         #print('loss_distance = ', loss_distance)
 
-            # 计算损失
-            # loss_distance = euclidean_distance(sampleX, sampleY)
-            #mask_element = create_mask(image_path='')
-            loss_overlap = 0
-            # print('##########', inputs[1])
-            for i in range(len(inputs[1])):
-                mask_image = create_mask(inputs[1][i], None, True)
-                mask_gripper = create_mask(inputs[2][i], None, False)
-                rotate = outputs[i][2].item()
-                overlap = check_black_overlap(mask_image, mask_gripper, rotate)
-                loss_overlap += overlap
-            loss = ((0.1 * loss_distance) + (0.9 * loss_overlap)).mean()
-            #print('loss = ', loss)
+    #         # 计算损失
+    #         # loss_distance = euclidean_distance(sampleX, sampleY)
+    #         #mask_element = create_mask(image_path='')
+    #         loss_overlap = inputs[1]
+    #         loss = ((0.1 * loss_distance) + (0.9 * loss_overlap)).mean()
+    #         #print('loss = ', loss)
             
-            # 向后传播和优化
-            loss.backward()
-            optimizer.step()
+    #         # 向后传播和优化
+    #         loss.backward()
+    #         optimizer.step()
             
-            # 统计
-            running_loss += loss.item()
-            _, predicted = torch.max(outputs, 1)
-            # total += loss_overlap.size(0)
-            # correct += (predicted == labels).sum().item()
+    #         # 统计
+    #         running_loss += loss.item()
+    #         _, predicted = torch.max(outputs, 1)
+    #         # total += loss_overlap.size(0)
+    #         # correct += (predicted == labels).sum().item()
         
-        # 每个epoch的损失和准确率
-        avg_loss = running_loss / len(train_loader)
-        # accuracy = 100 * correct / total
-        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}")
-        loss_list.append(avg_loss)
+    #     # 每个epoch的损失和准确率
+    #     avg_loss = running_loss / len(train_loader)
+    #     # accuracy = 100 * correct / total
+    #     print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}")
+    #     loss_list.append(avg_loss)
 
-    plt.figure(figsize=(6, 4))
-    plt.plot(loss_list, linestyle='-', color='b', label='Data Line')
-    plt.title("Line Plot Example")
-    plt.xlabel("Index")
-    plt.ylabel("Value")
-    plt.grid(True)
-    plt.legend()
+    # plt.figure(figsize=(6, 4))
+    # plt.plot(loss_list, linestyle='-', color='b', label='Data Line')
+    # plt.title("Line Plot Example")
+    # plt.xlabel("Index")
+    # plt.ylabel("Value")
+    # plt.grid(True)
+    # plt.legend()
 
-    # 保存图像到当前文件夹
-    plt.savefig("line_plot_03.png", dpi=300, bbox_inches='tight')  # 保存为文件，格式为 PNG
-    plt.close()
+    # # 保存图像到当前文件夹
+    # plt.savefig("line_plot_03.png", dpi=300, bbox_inches='tight')  # 保存为文件，格式为 PNG
+    # plt.close()
 
-    # 5. 测试模型
-    model.eval()  # 设定模型为评估模式
-    correct = 0
-    total = 0
+    # # 5. 测试模型
+    # model.eval()  # 设定模型为评估模式
+    # correct = 0
+    # total = 0
 
-    with torch.no_grad():  # 在测试阶段不需要计算梯度
-        print(len(test_loader))
-        id = 0
-        for inputs in tqdm(test_loader):
-            input_tensor = inputs[0].to(device)
-            outputs = model(input_tensor)
-            print('======>', outputs.shape)
-            pred_coords = outputs[0, :]
-            print(pred_coords)
+    # with torch.no_grad():  # 在测试阶段不需要计算梯度
+    #     print(len(test_loader))
+    #     for inputs in tqdm(test_loader):
+    #         inputs = [input_tensor.to(device) for input_tensor in inputs]
+    #         outputs = model(inputs[0])
+    #         print(outputs)
+    #         #_, predicted = torch.max(outputs, 1)
+    #         #total += labels.size(0)
+    #         #correct += (predicted == labels).sum().item()
 
-            #target_point = torch.tensor([112, 112], dtype=torch.float).to(device) 
-            #loss_distance = torch.sum((pred_coords - target_point) ** 2, dim=1).mean()
-            print(inputs[1])
-            mask_image = create_mask(inputs[1][0], None, True)
-            mask_gripper = create_mask(inputs[2][0], None, False)
-
-            rotate = outputs[0][2].item()
-            overlap = check_black_overlap(mask_image, mask_gripper, rotate)
-
-            rounded_tensor = torch.round(pred_coords)
-            rounded_values = [int(x.item()) for x in rounded_tensor]
-            visualize_image_transform(inputs[1][0], inputs[2][0], rounded_values[0], rounded_values[1], rounded_values[2], id)
-            id += 1
-
-    # 输出测试集的准确率
-    #test_accuracy = 100 * correct / total
-    #print(f"Test Accuracy: {test_accuracy:.2f}%")
+    # # 输出测试集的准确率
+    # #test_accuracy = 100 * correct / total
+    # #print(f"Test Accuracy: {test_accuracy:.2f}%")
