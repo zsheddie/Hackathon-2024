@@ -224,13 +224,19 @@ def visualize_image_transform(image1_path, image2_path, center_x, center_y, rota
     new_w = int(abs(w2 * np.cos(angle_rad)) + abs(h2 * np.sin(angle_rad)))
     new_h = int(abs(h2 * np.cos(angle_rad)) + abs(w2 * np.sin(angle_rad)))
 
+    # Ensure non-negative padding sizes
+    padding_top = max(0, (new_h - h2) // 2)
+    padding_bottom = max(0, (new_h - h2 + 1) // 2)
+    padding_left = max(0, (new_w - w2) // 2)
+    padding_right = max(0, (new_w - w2 + 1) // 2)
+
     # Create a large enough canvas to fit the rotated image
     padded_image2 = cv2.copyMakeBorder(image2, 
-                                       (new_h - h2) // 2, (new_h - h2 + 1) // 2, 
-                                       (new_w - w2) // 2, (new_w - w2 + 1) // 2, 
+                                       padding_top, padding_bottom, 
+                                       padding_left, padding_right, 
                                        cv2.BORDER_CONSTANT, value=(0, 0, 0, 0))
 
-    # Get the center of the new image
+    # Get the center of the padded image
     h2_padded, w2_padded = padded_image2.shape[:2]
     center = (w2_padded // 2, h2_padded // 2)
 
@@ -238,11 +244,21 @@ def visualize_image_transform(image1_path, image2_path, center_x, center_y, rota
     rotation_matrix = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
     rotated_image = cv2.warpAffine(padded_image2, rotation_matrix, (w2_padded, h2_padded), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
 
-    # Get the size of the first image
-    h1, w1 = image1.shape[:2]
+    # Get the bounding box of the non-transparent areas in the rotated image
+    non_transparent_area = np.where(rotated_image[:, :, 3] > 0)
+    min_x = min(non_transparent_area[1])
+    max_x = max(non_transparent_area[1])
+    min_y = min(non_transparent_area[0])
+    max_y = max(non_transparent_area[0])
 
-    # Calculate the final image size considering the second image's position
-    rotated_h, rotated_w = rotated_image.shape[:2]
+    # Crop the rotated image to its non-transparent area
+    cropped_rotated_image = rotated_image[min_y:max_y+1, min_x:max_x+1]
+
+    # Get the size of the cropped rotated image
+    rotated_h, rotated_w = cropped_rotated_image.shape[:2]
+
+    # Calculate the final canvas size
+    h1, w1 = image1.shape[:2]
     x_min = min(0, center_x - rotated_w // 2)
     y_min = min(0, center_y - rotated_h // 2)
     x_max = max(w1, center_x + rotated_w // 2)
@@ -257,28 +273,16 @@ def visualize_image_transform(image1_path, image2_path, center_x, center_y, rota
     # Paste the first image into the result image
     result_image[-y_min:h1 - y_min, -x_min:w1 - x_min] = image1
 
-    # Calculate the position of the second image
+    # Calculate the position of the cropped rotated image
     x_pos = center_x - rotated_w // 2 - x_min
     y_pos = center_y - rotated_h // 2 - y_min
 
-    # Expand the second image to ensure its non-transparent parts are fully visible
-    # Get the bounding box of the non-transparent areas
-    non_transparent_area = np.where(rotated_image[:, :, 3] > 0)
-    min_x = min(non_transparent_area[1])
-    max_x = max(non_transparent_area[1])
-    min_y = min(non_transparent_area[0])
-    max_y = max(non_transparent_area[0])
-
-    # Expand the image
-    expanded_rotated_image = rotated_image[min_y:max_y+1, min_x:max_x+1]
-
-    # Paste the expanded second image into the result image
-    for i in range(expanded_rotated_image.shape[0]):
-        for j in range(expanded_rotated_image.shape[1]):
+    # Paste the cropped rotated image into the result image
+    for i in range(rotated_h):
+        for j in range(rotated_w):
             if 0 <= i + y_pos < new_height and 0 <= j + x_pos < new_width:
-                # If the position is within the result image and not transparent, paste the pixel
-                if expanded_rotated_image[i, j][3] > 0:  # Check the alpha channel
-                    result_image[i + y_pos, j + x_pos] = expanded_rotated_image[i, j]
+                if cropped_rotated_image[i, j][3] > 0:  # Check the alpha channel
+                    result_image[i + y_pos, j + x_pos] = cropped_rotated_image[i, j]
 
     # Save the result image
     output_full_path = f"output_visualize/test_visualization_{output_path}.png"

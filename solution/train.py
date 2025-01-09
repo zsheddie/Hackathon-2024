@@ -314,7 +314,9 @@ if __name__ == "__main__":
                 y = pred_coords[i][1].item()
                 overlap = check_black_overlap(mask_image, mask_gripper, rotate, x, y)
                 loss_overlap += overlap
-            loss = ((0.1 * loss_distance) + (0.9 * loss_overlap)).mean()
+            # print('loss 1', 0.01*loss_distance)
+            # print('loss 2', 0.99*loss_overlap)
+            loss = ((0.002 * loss_distance) + (0.998 * loss_overlap)).mean()
             #print('loss = ', loss)
             
             # 向后传播和优化
