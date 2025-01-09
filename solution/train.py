@@ -255,7 +255,7 @@ if __name__ == "__main__":
     # optimizer = optim.Adam(model.parameters(), lr=0.01)
 
     # 4. 训练模型
-    num_epochs = 1
+    num_epochs = 40
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
 
@@ -264,8 +264,8 @@ if __name__ == "__main__":
     loss_list = []
     lr = 0.1
     for epoch in range(num_epochs):
-        if epoch % 10 == 9:
-            lr = lr * 0.1
+        if epoch % 3 == 2:
+            lr = lr * 0.9
         optimizer = optim.Adam(model.parameters(), lr)
 
         model.train()  # 设定模型为训练模式
@@ -281,8 +281,8 @@ if __name__ == "__main__":
             # print(inputs.shape)
             # 清零梯度
             optimizer.zero_grad()
-            #print('imputs 0: ', inputs[0].shape)
-            #print('imputs 1: ', inputs[1].shape)
+            # print('imputs 0: ', inputs[0].shape)
+            # print('imputs 1: ', inputs[1])
             
             # inputs[0].show()
             
@@ -291,7 +291,10 @@ if __name__ == "__main__":
             #print('outputs.shape: ', outputs.shape)   ## batch_size * 3
 
             pred_coords = outputs[:, :2]
-            target_point = torch.tensor([112, 112], dtype=torch.float).to(device) 
+            # print(pred_coords.shape)
+            target_point = torch.tensor(get_image_centers(inputs[1])).to(device) 
+
+            # target_point = torch.tensor([112, 112], dtype=torch.float).to(device) 
             # 计算欧几里得距离
             # distances = torch.norm(batch_tensor - target_point, dim=1)
             loss_distance = torch.sum((pred_coords - target_point) ** 2, dim=1).mean()

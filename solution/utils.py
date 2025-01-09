@@ -5,35 +5,37 @@ import os
 
 def create_mask(image_path, output_path = None, is_element = True):
     """
-    将背景为透明的图片中的透明背景设置为白色，其余部分设置为黑色。
+    Sets the transparent background of images with a transparent background to white, and other areas to black.
     
-    :param image_path: 输入图片路径
-    :param output_path: 输出图片路径
+    :param image_path: Input image path
+    :param output_path: Output image path
     """
-    # 加载图片，保留 Alpha 通道
+    # Load the image, keeping the Alpha channel
     image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     
-    # 检查是否有 Alpha 通道
+    # Check if there is an Alpha channel
     # print(image.shape)
     if len(image.shape) == 3 and image.shape[2] == 4:
-        # 提取 Alpha 通道
+        # Extract the Alpha channel
         alpha_channel = image[:, :, 3]
+        
+        # If it's not an element, print debug info
         #if is_element == False:
             #print('check 1', image.shape)
         
-        # 创建一个全白图像（255 为白色）
+        # Create a white image (255 is white)
         # white_background = np.ones_like(alpha_channel) * 255
         
-        # 将透明背景设置为白色，其他区域为黑色
+        # Set transparent areas to white, others to black
         if is_element == True:
-            # mask = cv2.bitwise_not(alpha_channel)  # 反转 Alpha 通道
+            # mask = cv2.bitwise_not(alpha_channel)  # Invert the Alpha channel
             mask = np.where(alpha_channel == 0, 255, 0).astype(np.uint8)
         else:
             #print('=======>', alpha_channel.shape)
             mask = np.where(alpha_channel == 0, 0, 255).astype(np.uint8)
         # result = cv2.merge((mask, mask, mask, white_background))
     elif len(image.shape) == 3 and image.shape[2] == 3:
-        # 假设三通道输入，透明区域定义为纯黑色（0,0,0）
+        # For three-channel input, define transparent areas as pure black (0,0,0)
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         mask = np.where(gray_image == 0, 255 if is_element else 0, 0 if is_element else 255).astype(np.uint8)
     elif len(image.shape) == 2:
@@ -41,67 +43,85 @@ def create_mask(image_path, output_path = None, is_element = True):
         
     else:
         raise ValueError("Input image must be either 1 or 3 or 4 channels")
-    # 保存结果
+    # Save the result
     # cv2.imwrite(output_path, mask)
 
     return mask
 
 
-def check_black_overlap(image1, image2, rotate = None):
-    """
-    检测两张黑白图片的黑色部分是否有重叠。
-
-    :param image1: numpy 数组格式的黑白图像1
-    :param image2: numpy 数组格式的黑白图像2
-    :return: 1 表示有重叠，0 表示无重叠
-    """
-    # 确保输入图像是单通道
-    if len(image1.shape) != 2 or len(image2.shape) != 2:
-        raise ValueError("input image must be black and white !")
+def check_black_overlap(image1, image2, rotate=None):
+    """ 
+    Checks for overlapping black areas in two black and white images
     
-    if rotate is not None:
-        h2, w2 = image2.shape
-        center = (w2 // 2, h2 // 2)  # 图片中心
-        rotation_matrix = cv2.getRotationMatrix2D(center, rotate, 1.0)  # 生成旋转矩阵
-        image2 = cv2.warpAffine(image2, rotation_matrix, (w2, h2), borderValue=255)  # 旋转并填充白色
+    :param image1: First black and white image in numpy array format
+    :param image2: Second black and white image in numpy array format
+    :param rotate: Rotation angle (in degrees) for the second image
+    :return: 1 if overlap exists, 0 if no overlap
+    """
+    # Ensure the input images are single-channel
+    if len(image1.shape) != 2 or len(image2.shape) != 2:
+        raise ValueError("input image must be black and white!")
 
-    # 获取两张图片的大小
+    if rotate is not None:
+        # Get the size of the second image
+        h2, w2 = image2.shape
+        
+        # Calculate the bounding box size after rotation
+        angle_rad = np.deg2rad(rotate)
+        new_w = int(abs(w2 * np.cos(angle_rad)) + abs(h2 * np.sin(angle_rad)))
+        new_h = int(abs(h2 * np.cos(angle_rad)) + abs(w2 * np.sin(angle_rad)))
+
+        # Create a large enough canvas to fit the rotated image
+        padded_image2 = cv2.copyMakeBorder(image2, 
+                                           (new_h - h2) // 2, (new_h - h2 + 1) // 2, 
+                                           (new_w - w2) // 2, (new_w - w2 + 1) // 2, 
+                                           cv2.BORDER_CONSTANT, value=255)
+
+        # Get the center of the new image
+        h2_padded, w2_padded = padded_image2.shape
+        center = (w2_padded // 2, h2_padded // 2)
+
+        # Generate rotation matrix and rotate the image
+        rotation_matrix = cv2.getRotationMatrix2D(center, rotate, 1.0)
+        image2 = cv2.warpAffine(padded_image2, rotation_matrix, (w2_padded, h2_padded), borderValue=255)
+
+    # Get the size of both images
     h1, w1 = image1.shape
     h2, w2 = image2.shape
 
-    # 找到最大尺寸
+    # Find the maximum size
     max_height = max(h1, h2)
     max_width = max(w1, w2)
 
-    # 扩展两张图片到相同大小，用白色填充（255）
+    # Pad both images to the same size with white color (255)
     image1_padded = cv2.copyMakeBorder(image1, 0, max_height - h1, 0, max_width - w1, cv2.BORDER_CONSTANT, value=255)
     image2_padded = cv2.copyMakeBorder(image2, 0, max_height - h2, 0, max_width - w2, cv2.BORDER_CONSTANT, value=255)
 
-    # 找到两张图片的黑色部分（像素值为 0）的重叠区域
+    # Find the black areas (pixel value 0) overlap between both images
     mask1 = (image1_padded == 0).astype(np.uint8)
     mask2 = (image2_padded == 0).astype(np.uint8)
     overlap = cv2.bitwise_and(mask1, mask2)
 
-    # 判断重叠区域是否存在黑色像素
-    if np.any(overlap):  # 如果有至少一个像素为 True（即重叠）
+    # Check if there is any black pixel in the overlap region
+    if np.any(overlap):  # If there is at least one True pixel (i.e. overlap)
         return 1
     else:
         return 0
 
 def euclidean_distance(coord1, coord2):
     """
-    计算两个n维坐标的欧几里得距离
+    Computes the Euclidean distance between two n-dimensional coordinates
 
-    参数:
-    coord1 (ndarray): 第一个坐标 (n维数组)
-    coord2 (ndarray): 第二个坐标 (n维数组)
+    Parameters:
+    coord1 (ndarray): The first coordinate (n-dimensional array)
+    coord2 (ndarray): The second coordinate (n-dimensional array)
 
-    返回:
-    float: 两个坐标之间的欧几里得距离
+    Returns:
+    float: The Euclidean distance between the two coordinates
     """
     coord1 = np.array(coord1)
     coord2 = np.array(coord2)
-    distance = np.linalg.norm(coord1 - coord2)  # 使用 NumPy 计算欧几里得距离
+    distance = np.linalg.norm(coord1 - coord2)  # Using NumPy to compute the Euclidean distance
 
     return distance
 
@@ -153,65 +173,141 @@ def interactive_canny(image_name):
 
     cv2.destroyAllWindows()
 
-def visualize_image_transform(image1_path, image2_path, x_offset, y_offset, rotation_angle, output_path):
-    # 加载第一张图像
+import cv2
+import numpy as np
+
+def visualize_image_transform(image1_path, image2_path, center_x, center_y, rotation_angle, output_path):
+    # Load the first image
     image1 = cv2.imread(image1_path, cv2.IMREAD_UNCHANGED)
     if image1 is None:
-        raise FileNotFoundError(f"无法加载图片：{image1_path}")
+        raise FileNotFoundError(f"Unable to load image: {image1_path}")
 
-    # 加载第二张图像
+    # Load the second image
     image2 = cv2.imread(image2_path, cv2.IMREAD_UNCHANGED)
     if image2 is None:
-        raise FileNotFoundError(f"无法加载图片：{image2_path}")
+        raise FileNotFoundError(f"Unable to load image: {image2_path}")
 
-    # 如果第一张图像是 3 通道，添加一个 alpha 通道并设置为不透明
-    print(image1.shape)
-    if image1.shape[2] == 3:
+    # If the first image is single-channel or two-channel, convert to 4 channels (with alpha)
+    if len(image1.shape) == 2:  # Single-channel grayscale image
+        alpha_channel = np.ones((image1.shape[0], image1.shape[1], 1), dtype=np.uint8) * 255
+        image1 = cv2.merge((image1, image1, image1, alpha_channel))
+    elif image1.shape[2] == 1:  # Two-channel (assumed grayscale+alpha)
+        gray = image1[:, :, 0]
+        alpha_channel = image1[:, :, 1]
+        image1 = cv2.merge((gray, gray, gray, alpha_channel))
+    elif image1.shape[2] == 3:  # Three-channel
         alpha_channel = np.ones((image1.shape[0], image1.shape[1], 1), dtype=np.uint8) * 255
         image1 = np.concatenate((image1, alpha_channel), axis=2)
 
-    # 确保第二张图像有 alpha 通道
+    # Ensure the second image has an alpha channel
     if image2.shape[2] != 4:
         image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2BGRA)
 
-    # 获取第一张图像的尺寸
-    h1, w1 = image1.shape[:2]
-
-    # 获取第二张图像的尺寸
+    # Get the size of the second image
     h2, w2 = image2.shape[:2]
 
-    # 计算旋转中心（第二张图的中心）
-    center = (w2 // 2, h2 // 2)
+    # Calculate the bounding box size after rotation
+    angle_rad = np.deg2rad(rotation_angle)
+    new_w = int(abs(w2 * np.cos(angle_rad)) + abs(h2 * np.sin(angle_rad)))
+    new_h = int(abs(h2 * np.cos(angle_rad)) + abs(w2 * np.sin(angle_rad)))
 
-    # 获取旋转矩阵
+    # Create a large enough canvas to fit the rotated image
+    padded_image2 = cv2.copyMakeBorder(image2, 
+                                       (new_h - h2) // 2, (new_h - h2 + 1) // 2, 
+                                       (new_w - w2) // 2, (new_w - w2 + 1) // 2, 
+                                       cv2.BORDER_CONSTANT, value=(0, 0, 0, 0))
+
+    # Get the center of the new image
+    h2_padded, w2_padded = padded_image2.shape[:2]
+    center = (w2_padded // 2, h2_padded // 2)
+
+    # Get the rotation matrix and rotate the image
     rotation_matrix = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
+    rotated_image = cv2.warpAffine(padded_image2, rotation_matrix, (w2_padded, h2_padded), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
 
-    # 将第二张图像旋转
-    rotated_image = cv2.warpAffine(image2, rotation_matrix, (w2, h2), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+    # Get the size of the first image
+    h1, w1 = image1.shape[:2]
 
-    # 计算最终图像的尺寸
-    new_width = max(w1, w2 + x_offset)
-    new_height = max(h1, h2 + y_offset)
+    # Calculate the final image size considering the second image's position
+    rotated_h, rotated_w = rotated_image.shape[:2]
+    x_min = min(0, center_x - rotated_w // 2)
+    y_min = min(0, center_y - rotated_h // 2)
+    x_max = max(w1, center_x + rotated_w // 2)
+    y_max = max(h1, center_y + rotated_h // 2)
 
-    # 创建一个新的空白图像，背景填充为透明
+    new_width = x_max - x_min
+    new_height = y_max - y_min
+
+    # Create a new blank image with a transparent background
     result_image = np.zeros((new_height, new_width, 4), dtype=np.uint8)
 
-    # 将第一张图像粘贴到空白图像的左上角
-    result_image[:h1, :w1] = image1
+    # Paste the first image into the result image
+    result_image[-y_min:h1 - y_min, -x_min:w1 - x_min] = image1
 
-    # 计算第二张图放置的位置，考虑偏移量
-    x_pos = max(0, x_offset)
-    y_pos = max(0, y_offset)
+    # Calculate the position of the second image
+    x_pos = center_x - rotated_w // 2 - x_min
+    y_pos = center_y - rotated_h // 2 - y_min
 
-    # 将旋转后的第二张图像粘贴到结果图像中
-    for i in range(h2):
-        for j in range(w2):
+    # Expand the second image to ensure its non-transparent parts are fully visible
+    # Get the bounding box of the non-transparent areas
+    non_transparent_area = np.where(rotated_image[:, :, 3] > 0)
+    min_x = min(non_transparent_area[1])
+    max_x = max(non_transparent_area[1])
+    min_y = min(non_transparent_area[0])
+    max_y = max(non_transparent_area[0])
+
+    # Expand the image
+    expanded_rotated_image = rotated_image[min_y:max_y+1, min_x:max_x+1]
+
+    # Paste the expanded second image into the result image
+    for i in range(expanded_rotated_image.shape[0]):
+        for j in range(expanded_rotated_image.shape[1]):
             if 0 <= i + y_pos < new_height and 0 <= j + x_pos < new_width:
-                # 如果该位置在结果图像内，且不是透明像素，则将像素放置进去
-                if rotated_image[i, j][3] > 0:  # 检查 alpha 通道
-                    result_image[i + y_pos, j + x_pos] = rotated_image[i, j]
+                # If the position is within the result image and not transparent, paste the pixel
+                if expanded_rotated_image[i, j][3] > 0:  # Check the alpha channel
+                    result_image[i + y_pos, j + x_pos] = expanded_rotated_image[i, j]
 
-    # 保存结果图像
+    # Save the result image
     output_full_path = f"output_visualize/test_visualization_{output_path}.png"
     cv2.imwrite(output_full_path, result_image, [cv2.IMWRITE_PNG_COMPRESSION, 9])
-    print(f"结果图像已保存到 {output_full_path}")
+    print(f"Result image saved at {output_full_path}")
+
+def get_image_center(image_path):
+    # Load the image
+    image = cv2.imread(image_path)
+    
+    if image is None:
+        raise FileNotFoundError(f"Unable to load image: {image_path}")
+    
+    # Get the height and width of the image
+    height, width = image.shape[:2]
+    
+    # Calculate the center coordinates
+    center_x = width // 2
+    center_y = height // 2
+    
+    return center_x, center_y
+
+def get_image_centers(image_paths):
+    centers = []  # Used to store center coordinates
+
+    # Iterate through each image path
+    for image_path in image_paths:
+        # Load the image
+        image = cv2.imread(image_path)
+        
+        if image is None:
+            raise FileNotFoundError(f"Unable to load image: {image_path}")
+        
+        # Get the height and width of the image
+        height, width = image.shape[:2]
+        
+        # Calculate the center coordinates
+        center_x = width // 2
+        center_y = height // 2
+        
+        # Add the center coordinates to the list
+        centers.append([center_x, center_y])
+    
+    # Convert the list to a numpy array and return
+    return np.array(centers)
